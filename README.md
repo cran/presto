@@ -1,0 +1,89 @@
+# presto
+
+Fast differential expression and marker discovery for single-cell data.
+
+`presto` is built around two function families:
+
+- **`wilcoxauc()`** — Wilcoxon rank-sum test and area-under-the-ROC
+  across groups, fast enough to run on whole-genome × hundred-thousand-
+  cell matrices in seconds.
+- **`pseudobulk_deseq2()`** — collapse cells into per-donor pseudobulks
+  with `collapse_counts()` and run a count-based regression with
+  `DESeq2` in one-vs-all, pairwise, or within-cluster designs.
+
+Both work directly with sparse `dgCMatrix` input and have dispatchers
+for [`Seurat`](https://satijalab.org/seurat/) and
+[`SingleCellExperiment`](https://bioconductor.org/packages/SingleCellExperiment/)
+objects.
+
+## Installation
+
+```r
+# install.packages("devtools")
+devtools::install_github("immunogenomics/presto")
+```
+
+`pseudobulk_deseq2()` additionally requires
+[`DESeq2`](https://bioconductor.org/packages/DESeq2/), which lives in
+`Suggests`, so you only need it if you use that feature.
+
+## Quick example
+
+```r
+library(presto)
+
+## Generate a tiny toy dataset deterministically.
+set.seed(42)
+exprs <- matrix(rpois(25 * 150, lambda = 2), nrow = 25,
+                dimnames = list(paste0("G", 1:25), NULL))
+y <- rep(c("A", "B", "C"), each = 50)
+
+res <- wilcoxauc(exprs, y)
+head(res)
+#>   feature group avgExpr  logFC statistic   auc   pval  padj pct_in pct_out
+#> 1      G1     A    2.10  0.200      2740 0.548 0.3264 0.510     86      89
+#> 2      G2     A    1.58 -0.560      1896 0.379 0.0137 0.172     84      86
+#> 3      G3     A    1.86  0.020      2432 0.486 0.7826 0.893     84      89
+#> 4      G4     A    1.96 -0.210      2384 0.477 0.6362 0.884     90      90
+#> 5      G5     A    2.00 -0.280      2214 0.443 0.2442 0.505     82      88
+#> 6      G6     A    2.26  0.240      2775 0.555 0.2627 0.505     90      83
+```
+
+`top_markers()` summarises the most distinguishing features per group:
+
+```r
+top_markers(res, n = 5, auc_min = 0.5)
+#> # A tibble: 5 × 4
+#>    rank A     B     C
+#>   <int> <chr> <chr> <chr>
+#> 1     1 G10   G15   G25
+#> 2     2 G24   G13   G5
+#> 3     3 G16   G22   G18
+#> 4     4 G6    G2    G14
+#> 5     5 G7    G20   G2
+```
+
+The same call also works on Seurat and SingleCellExperiment objects:
+
+```r
+wilcoxauc(seurat_object, group_by = "cluster")
+wilcoxauc(sce_object,    group_by = "cluster")
+```
+
+## Walkthroughs
+
+For full examples on a real 25,000-cell single-cell RNA-seq dataset, see:
+
+- [**Getting started**](https://immunogenomics.github.io/presto/articles/getting-started.html)
+  — `wilcoxauc()` and `top_markers()` for marker discovery, including a
+  description of every output column and how to restrict the comparison
+  to a subset of groups.
+- [**Pseudobulk differential expression with DESeq2**](https://immunogenomics.github.io/presto/articles/pseudobulk.html)
+  — `collapse_counts()` and the three `pseudobulk_deseq2()` modes
+  (one-vs-all, pairwise, within), plus `top_markers_dds()` and
+  `summarize_dge_pairs()`.
+
+## Performance
+
+A benchmark on 1,000,000 observations × 1,000 features × 10 groups
+runs in 16 seconds on sparse input and 85 seconds on dense input.
